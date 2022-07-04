@@ -1,0 +1,51 @@
+--- qtopcua-everywhere-src-5.15.5/src/opcua/x509/openssl_symbols.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/opcua/x509/openssl_symbols.cpp	2022-07-03 17:05:49.672346278 +0200
+@@ -273,7 +273,7 @@ DEFINEFUNC3(int, BIO_read, BIO *a, a, vo
+ DEFINEFUNC3(int, BIO_write, BIO *a, a, const void *b, b, int c, c, return -1, return)
+ DEFINEFUNC(int, BN_num_bits, const BIGNUM *a, a, return 0, return)
+ DEFINEFUNC2(BN_ULONG, BN_mod_word, const BIGNUM *a, a, BN_ULONG w, w, return static_cast<BN_ULONG>(-1), return)
+-DEFINEFUNC2(int, BN_set_word, const BIGNUM *a, a, BN_ULONG w, w, return 0, return)
++DEFINEFUNC2(int, BN_set_word, BIGNUM *a, a, BN_ULONG w, w, return 0, return)
+ DEFINEFUNC(BIGNUM *, BN_new, void, DUMMYARG, return nullptr, return)
+ DEFINEFUNC(void, BN_clear, BIGNUM *bignum, bignum, return, return)
+ DEFINEFUNC(void, BN_free, BIGNUM *bignum, bignum, return, return)
+@@ -339,7 +339,7 @@ DEFINEFUNC4(DH *, PEM_read_bio_DHparams,
+ DEFINEFUNC7(int, PEM_write_bio_DSAPrivateKey, BIO *a, a, DSA *b, b, const EVP_CIPHER *c, c, unsigned char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
+ DEFINEFUNC7(int, PEM_write_bio_RSAPrivateKey, BIO *a, a, RSA *b, b, const EVP_CIPHER *c, c, unsigned char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
+ DEFINEFUNC7(int, PEM_write_bio_PrivateKey, BIO *a, a, EVP_PKEY *b, b, const EVP_CIPHER *c, c, unsigned char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
+-DEFINEFUNC7(int, PEM_write_bio_PKCS8PrivateKey, BIO *a, a, EVP_PKEY *b, b, const EVP_CIPHER *c, c, unsigned char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
++DEFINEFUNC7(int, PEM_write_bio_PKCS8PrivateKey, BIO *a, a, EVP_PKEY *b, b, const EVP_CIPHER *c, c, char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
+ #ifndef OPENSSL_NO_EC
+ DEFINEFUNC7(int, PEM_write_bio_ECPrivateKey, BIO *a, a, EC_KEY *b, b, const EVP_CIPHER *c, c, unsigned char *d, d, int e, e, pem_password_cb *f, f, void *g, g, return 0, return)
+ #endif
+--- qtopcua-everywhere-src-5.15.5/src/opcua/x509/openssl_symbols_p.h.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/opcua/x509/openssl_symbols_p.h	2022-07-03 17:09:35.181124592 +0200
+@@ -279,7 +279,7 @@ int q_BN_is_word(BIGNUM *a, BN_ULONG w);
+ #endif // !opensslv11
+ 
+ BN_ULONG q_BN_mod_word(const BIGNUM *a, BN_ULONG w);
+-int q_BN_set_word(const BIGNUM *a, BN_ULONG w);
++int q_BN_set_word(BIGNUM *a, BN_ULONG w);
+ BIGNUM *q_BN_new();
+ void q_BN_clear(BIGNUM *a);
+ void q_BN_free(BIGNUM *a);
+@@ -385,7 +385,7 @@ int q_PEM_write_bio_RSAPrivateKey(BIO *a
+                                   int e, pem_password_cb *f, void *g);
+ int q_PEM_write_bio_PrivateKey(BIO *a, EVP_PKEY *b, const EVP_CIPHER *c, unsigned char *d,
+                                int e, pem_password_cb *f, void *g);
+-int q_PEM_write_bio_PKCS8PrivateKey(BIO *a, EVP_PKEY *b, const EVP_CIPHER *c, unsigned char *d,
++int q_PEM_write_bio_PKCS8PrivateKey(BIO *a, EVP_PKEY *b, const EVP_CIPHER *c, char *d,
+                                int e, pem_password_cb *f, void *g);
+ #ifndef OPENSSL_NO_EC
+ int q_PEM_write_bio_ECPrivateKey(BIO *a, EC_KEY *b, const EVP_CIPHER *c, unsigned char *d,
+--- qtopcua-everywhere-src-5.15.5/src/opcua/x509/qopcuakeypair_openssl.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/opcua/x509/qopcuakeypair_openssl.cpp	2022-07-03 17:14:46.672770431 +0200
+@@ -240,7 +240,7 @@ QByteArray QOpcUaKeyPairPrivate::private
+     }
+ 
+     if (0 == q_PEM_write_bio_PKCS8PrivateKey(bio, m_keyData, enc,
+-                                         enc ? (unsigned char*)password.toUtf8().constData() : NULL,
++                                         enc ? (char*)password.toUtf8().constData() : NULL,
+                                          enc ? password.length() : 0,
+                                          NULL /* callback */, NULL /* userdata */)) {
+         qCWarning(lcSsl) << "Failed to write private key:" << getOpenSslError();

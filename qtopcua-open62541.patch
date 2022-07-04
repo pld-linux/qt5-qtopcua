@@ -1,0 +1,178 @@
+--- qtopcua-everywhere-src-5.15.5/config.tests/open62541/main.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/config.tests/open62541/main.cpp	2022-07-03 17:37:30.955379477 +0200
+@@ -35,7 +35,12 @@
+ ****************************************************************************/
+ 
+ #include <stdio.h>
+-#include "open62541.h"
++#include <open62541/client.h>
++#include <open62541/client_config_default.h>
++#include <open62541/client_highlevel.h>
++#include <open62541/types.h>
++#include <open62541/types_generated_handling.h>
++#include <open62541/util.h>
+ 
+ int main(int argc, char *argv[])
+ {
+--- qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541.h.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541.h	2022-07-04 17:42:51.130645159 +0200
+@@ -49,7 +49,11 @@
+ #pragma clang diagnostic ignored "-Wunused-parameter"
+ #endif
+ 
+-#include <open62541.h>
++#include <open62541/client.h>
++#include <open62541/types.h>
++#include <open62541/types_generated.h>
++#include <open62541/types_generated_handling.h>
++#include <open62541/util.h>
+ 
+ #if defined(_MSC_VER)
+ #pragma warning(pop)
+--- qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541backend.h.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541backend.h	2022-07-04 18:34:39.120149437 +0200
+@@ -94,7 +94,7 @@ public:
+     const double m_maximumIterateInterval;
+ 
+ private:
+-    static void clientStateCallback(UA_Client *client, UA_ClientState state);
++    static void clientStateCallback(UA_Client *client, UA_SecureChannelState channelState, UA_SessionState sessionState, UA_StatusCode connectStatus);
+ 
+     QOpen62541Subscription *getSubscriptionForItem(quint64 handle, QOpcUa::NodeAttribute attr);
+     QOpcUaApplicationDescription convertApplicationDescription(UA_ApplicationDescription &desc);
+--- qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541backend.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541backend.cpp	2022-07-04 18:37:32.872615124 +0200
+@@ -43,6 +43,9 @@
+ #include "qopcuaauthenticationinformation.h"
+ #include <qopcuaerrorstate.h>
+ 
++#include <open62541/client_config_default.h>
++#include <open62541/client_highlevel.h>
++
+ #include <QtCore/QDir>
+ #include <QtCore/QFile>
+ #include <QtCore/qloggingcategory.h>
+@@ -754,13 +757,13 @@ void Open62541AsyncBackend::browse(quint
+     emit browseFinished(handle, ret, statusCode);
+ }
+ 
+-void Open62541AsyncBackend::clientStateCallback(UA_Client *client, UA_ClientState state)
++void Open62541AsyncBackend::clientStateCallback(UA_Client *client, UA_SecureChannelState channelState, UA_SessionState sessionState, UA_StatusCode connectStatus)
+ {
+     Open62541AsyncBackend *backend = static_cast<Open62541AsyncBackend *>(UA_Client_getContext(client));
+     if (!backend || !backend->m_useStateCallback)
+         return;
+ 
+-    if (state == UA_CLIENTSTATE_DISCONNECTED) {
++    if (sessionState == UA_SESSIONSTATE_CLOSED) {
+         emit backend->stateAndOrErrorChanged(QOpcUaClient::Disconnected, QOpcUaClient::ConnectionError);
+         backend->m_useStateCallback = false;
+         // Use a queued connection to make sure the subscription is not deleted if the callback was triggered
+@@ -910,7 +913,7 @@ void Open62541AsyncBackend::connectToEnd
+         }
+ 
+         const auto credentials = authInfo.authenticationData().value<QPair<QString, QString>>();
+-        ret = UA_Client_connect_username(m_uaclient, endpoint.endpointUrl().toUtf8().constData(),
++        ret = UA_Client_connectUsername(m_uaclient, endpoint.endpointUrl().toUtf8().constData(),
+                                          credentials.first.toUtf8().constData(), credentials.second.toUtf8().constData());
+     } else {
+         emit stateAndOrErrorChanged(QOpcUaClient::Disconnected, QOpcUaClient::UnsupportedAuthenticationInformation);
+--- qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541subscription.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541subscription.cpp	2022-07-04 18:50:23.235473426 +0200
+@@ -50,6 +50,8 @@
+ 
+ #include <QtCore/qloggingcategory.h>
+ 
++#include <open62541/client_subscriptions.h>
++
+ QT_BEGIN_NAMESPACE
+ 
+ Q_DECLARE_LOGGING_CATEGORY(QT_OPCUA_PLUGINS_OPEN62541)
+--- qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541valueconverter.cpp.orig	2022-05-16 17:16:46.000000000 +0200
++++ qtopcua-everywhere-src-5.15.5/src/plugins/opcua/open62541/qopen62541valueconverter.cpp	2022-07-04 22:09:49.278798206 +0200
+@@ -155,57 +155,59 @@ QVariant toQVariant(const UA_Variant &va
+         return QVariant();
+     }
+ 
+-    switch (value.type->typeIndex) {
+-    case UA_TYPES_BOOLEAN:
++    switch (value.type->typeKind) {
++    case UA_DATATYPEKIND_BOOLEAN:
+         return arrayToQVariant<bool, UA_Boolean>(value, QMetaType::Bool);
+-    case UA_TYPES_SBYTE:
++    case UA_DATATYPEKIND_SBYTE:
+         return arrayToQVariant<signed char, UA_SByte>(value, QMetaType::SChar);
+-    case UA_TYPES_BYTE:
++    case UA_DATATYPEKIND_BYTE:
+         return arrayToQVariant<uchar, UA_Byte>(value, QMetaType::UChar);
+-    case UA_TYPES_INT16:
++    case UA_DATATYPEKIND_INT16:
+         return arrayToQVariant<qint16, UA_Int16>(value, QMetaType::Short);
+-    case UA_TYPES_UINT16:
++    case UA_DATATYPEKIND_UINT16:
+         return arrayToQVariant<quint16, UA_UInt16>(value, QMetaType::UShort);
+-    case UA_TYPES_INT32:
++    case UA_DATATYPEKIND_INT32:
+         return arrayToQVariant<qint32, UA_Int32>(value, QMetaType::Int);
+-    case UA_TYPES_UINT32:
++    case UA_DATATYPEKIND_UINT32:
+         return arrayToQVariant<quint32, UA_UInt32>(value, QMetaType::UInt);
+-    case UA_TYPES_INT64:
++    case UA_DATATYPEKIND_INT64:
+         return arrayToQVariant<int64_t, UA_Int64>(value, QMetaType::LongLong);
+-    case UA_TYPES_UINT64:
++    case UA_DATATYPEKIND_UINT64:
+         return arrayToQVariant<uint64_t, UA_UInt64>(value, QMetaType::ULongLong);
+-    case UA_TYPES_FLOAT:
++    case UA_DATATYPEKIND_FLOAT:
+         return arrayToQVariant<float, UA_Float>(value, QMetaType::Float);
+-    case UA_TYPES_DOUBLE:
++    case UA_DATATYPEKIND_DOUBLE:
+         return arrayToQVariant<double, UA_Double>(value, QMetaType::Double);
+-    case UA_TYPES_STRING:
++    case UA_DATATYPEKIND_STRING:
+         return arrayToQVariant<QString, UA_String>(value, QMetaType::QString);
+-    case UA_TYPES_BYTESTRING:
++    case UA_DATATYPEKIND_BYTESTRING:
+         return arrayToQVariant<QByteArray, UA_ByteString>(value, QMetaType::QByteArray);
+-    case UA_TYPES_LOCALIZEDTEXT:
++    case UA_DATATYPEKIND_LOCALIZEDTEXT:
+         return arrayToQVariant<QOpcUaLocalizedText, UA_LocalizedText>(value);
+-    case UA_TYPES_NODEID:
++    case UA_DATATYPEKIND_NODEID:
+         return arrayToQVariant<QString, UA_NodeId>(value, QMetaType::QString);
+-    case UA_TYPES_DATETIME:
++    case UA_DATATYPEKIND_DATETIME:
+         return arrayToQVariant<QDateTime, UA_DateTime>(value, QMetaType::QDateTime);
+-    case UA_TYPES_GUID:
++    case UA_DATATYPEKIND_GUID:
+         return arrayToQVariant<QUuid, UA_Guid>(value, QMetaType::QUuid);
+-    case UA_TYPES_XMLELEMENT:
++    case UA_DATATYPEKIND_XMLELEMENT:
+         return arrayToQVariant<QString, UA_XmlElement>(value, QMetaType::QString);
+-    case UA_TYPES_QUALIFIEDNAME:
++    case UA_DATATYPEKIND_QUALIFIEDNAME:
+         return arrayToQVariant<QOpcUaQualifiedName, UA_QualifiedName>(value);
+-    case UA_TYPES_STATUSCODE:
++    case UA_DATATYPEKIND_STATUSCODE:
+         return arrayToQVariant<QOpcUa::UaStatusCode, UA_StatusCode>(value, QMetaType::UInt);
+-    case UA_TYPES_EXTENSIONOBJECT:
++    case UA_DATATYPEKIND_EXTENSIONOBJECT:
+         return arrayToQVariant<QVariant, UA_ExtensionObject>(value);
+-    case UA_TYPES_EXPANDEDNODEID:
++    case UA_DATATYPEKIND_EXPANDEDNODEID:
+         return arrayToQVariant<QOpcUaExpandedNodeId, UA_ExpandedNodeId>(value);
+-    case UA_TYPES_ARGUMENT:
++    case UA_DATATYPEKIND_STRUCTURE:
++	if (!strcmp(value.type->typeName, "Argument"))
+         return arrayToQVariant<QOpcUaArgument, UA_Argument>(value);
+-    case UA_TYPES_RANGE:
++	else if (!strcmp(value.type->typeName, "Range"))
+         return arrayToQVariant<QOpcUaRange, UA_Range>(value);
++	/* fallthrough */
+     default:
+-        qCWarning(QT_OPCUA_PLUGINS_OPEN62541) << "Variant conversion from Open62541 for typeIndex" << value.type->typeIndex << " not implemented";
++        qCWarning(QT_OPCUA_PLUGINS_OPEN62541) << "Variant conversion from Open62541 for typeKind" << value.type->typeKind << " not implemented";
+         return QVariant();
+     }
+ }
