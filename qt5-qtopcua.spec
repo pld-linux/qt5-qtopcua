@@ -9,12 +9,12 @@
 Summary:	The Qt5 OpcUa library
 Summary(pl.UTF-8):	Biblioteka Qt5 OpcUa
 Name:		qt5-%{orgname}
-Version:	5.15.10
+Version:	5.15.11
 Release:	1
 License:	GPL v3+ or commercial
 Group:		Libraries
 Source0:	https://download.qt.io/official_releases/qt/5.15/%{version}/submodules/%{orgname}-everywhere-opensource-src-%{version}.tar.xz
-# Source0-md5:	6e38dc1a17a4f96c8ed5b1897e495862
+# Source0-md5:	b3b8305e1a11652a2ea7c3aea646660e
 Patch0:		%{orgname}-openssl.patch
 Patch1:		%{orgname}-open62541.patch
 URL:		https://www.qt.io/
