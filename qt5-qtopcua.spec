@@ -126,8 +126,8 @@ Przykłady do biblioteki Qt5 OpcUa.
 
 %prep
 %setup -q -n %{orgname}-everywhere-src-%{version}
-%patch0 -p1
-%patch1 -p1
+%patch -P0 -p1
+%patch -P1 -p1
 
 %build
 %{qmake_qt5} -- \
