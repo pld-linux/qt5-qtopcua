@@ -13,7 +13,7 @@ Version:	5.15.16
 Release:	4
 License:	GPL v3+ or commercial
 Group:		Libraries
-Source0:	https://download.qt.io/official_releases/qt/5.15/%{version}/submodules/%{orgname}-everywhere-opensource-src-%{version}.tar.xz
+Source0:	https://download.qt.io/archive/qt/5.15/%{version}/submodules/%{orgname}-everywhere-opensource-src-%{version}.tar.xz
 # Source0-md5:	a6e369c26a0c42064bc2f0679f45bd3c
 Patch0:		%{orgname}-openssl.patch
 Patch1:		%{orgname}-open62541.patch
